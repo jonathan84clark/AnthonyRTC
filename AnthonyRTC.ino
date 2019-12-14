@@ -10,6 +10,8 @@
 #include "DS3231.h"
 #include <Wire.h>
 
+#define GREEN_LED 3
+#define RED_LED 4
 // On the Arduino Nano SDA=A4, SCL=A5
 RTClib RTC;
 //DS3231 Clock;
@@ -17,6 +19,8 @@ RTClib RTC;
 void setup() {
   // Start the serial port
   Serial.begin(9600);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
 
   // Start the I2C interface
   Wire.begin();
@@ -35,30 +39,38 @@ void SetClock()
    Clock.setSecond(0);
    */
 }
+
+void SerialPrintTime(DateTime now)
+{
+   Serial.print(now.year(), DEC);
+   Serial.print('/');
+   Serial.print(now.month(), DEC);
+   Serial.print('/');
+   Serial.print(now.day(), DEC);
+   Serial.print(' ');
+   Serial.print(now.hour(), DEC);
+   Serial.print(':');
+   Serial.print(now.minute(), DEC);
+   Serial.print(':');
+   Serial.print(now.second(), DEC);
+   Serial.println();
+}
+
 void loop() {
     delay(1000);
-  
     DateTime now = RTC.now();
-    
-    Serial.print(now.year(), DEC);
-    Serial.print('/');
-    Serial.print(now.month(), DEC);
-    Serial.print('/');
-    Serial.print(now.day(), DEC);
-    Serial.print(' ');
-    Serial.print(now.hour(), DEC);
-    Serial.print(':');
-    Serial.print(now.minute(), DEC);
-    Serial.print(':');
-    Serial.print(now.second(), DEC);
-    Serial.println();
-
-    /*
-    Serial.print(" since midnight 1/1/1970 = ");
-    Serial.print(now.unixtime());
-    Serial.print("s = ");
-    Serial.print(now.unixtime() / 86400L);
-    Serial.println("d");
-    */
-
+    if (now.hour() >= 3 && now.hour() < 7 || now.hour() == 7 && now.minute() < 30)
+    {
+        digitalWrite(RED_LED, HIGH);
+    }
+    else if (now.hour() == 7 && now.minute() >= 30 && now.minute() < 35)
+    {
+        digitalWrite(RED_LED, LOW);
+        digitalWrite(GREEN_LED, HIGH);
+    }
+    else if (now.hour() >= 7 && now.minute() >= 35)
+    {
+       digitalWrite(RED_LED, LOW);
+       digitalWrite(GREEN_LED, LOW);
+    }
 }
