@@ -14,7 +14,7 @@
 #define RED_LED 4
 // On the Arduino Nano SDA=A4, SCL=A5
 RTClib RTC;
-//DS3231 Clock;
+DS3231 Clock;
 
 void setup() {
   // Start the serial port
@@ -29,15 +29,13 @@ void setup() {
 
 void SetClock()
 {
-  /*
    Clock.setYear(19);
    Clock.setMonth(12);
-   Clock.setDate(12);
-   Clock.setDoW(5);
-   Clock.setHour(21);
-   Clock.setMinute(31);
+   Clock.setDate(15);
+   Clock.setDoW(1);
+   Clock.setHour(19);
+   Clock.setMinute(51);
    Clock.setSecond(0);
-   */
 }
 
 void SerialPrintTime(DateTime now)
@@ -59,6 +57,7 @@ void SerialPrintTime(DateTime now)
 void loop() {
     delay(1000);
     DateTime now = RTC.now();
+    //SerialPrintTime(now);
     if (now.hour() >= 3 && now.hour() < 7 || now.hour() == 7 && now.minute() < 30)
     {
         digitalWrite(RED_LED, HIGH);
@@ -68,7 +67,7 @@ void loop() {
         digitalWrite(RED_LED, LOW);
         digitalWrite(GREEN_LED, HIGH);
     }
-    else if (now.hour() >= 7 && now.minute() >= 35)
+    else if (now.hour() >= 9 && now.minute() >= 35)
     {
        digitalWrite(RED_LED, LOW);
        digitalWrite(GREEN_LED, LOW);
