@@ -20,6 +20,8 @@ namespace RTCProgrammer
             InitializeComponent();
         }
 
+        
+
         private void Connect()
         {
             serialPort = new SerialPort();
@@ -33,6 +35,39 @@ namespace RTCProgrammer
             serialPort.Open();
             Console.WriteLine("Connected");
         }
+
+        private void AddEventTime()
+        {
+            byte[] buffer = new byte[16];
+            buffer[0] = 145;
+            buffer[1] = 198;
+            buffer[2] = 2;
+            buffer[3] = 0xFF;
+            buffer[4] = 0x01;
+            buffer[5] = 21;
+            buffer[6] = 35;
+            buffer[7] = 21;
+            buffer[8] = 36;
+            serialPort.Write(buffer, 0, 16);
+            Console.WriteLine("Time Set");
+        }
+
+        private void ClearEEProm()
+        {
+            byte[] buffer = new byte[16];
+            buffer[0] = 145;
+            buffer[1] = 198;
+            buffer[2] = 3;
+            buffer[3] = 0;
+            buffer[4] = 0;
+            buffer[5] = 0;
+            buffer[6] = 0;
+            buffer[7] = 0;
+            buffer[8] = 0;
+            serialPort.Write(buffer, 0, 16);
+            Console.WriteLine("EEProm Clear");
+        }
+
 
         private void SendTimeSetting()
         {
@@ -120,6 +155,16 @@ namespace RTCProgrammer
         private void updateTime_Click(object sender, EventArgs e)
         {
             SendTimeSetting();
+        }
+
+        private void addTimeBtn_Click(object sender, EventArgs e)
+        {
+            AddEventTime();
+        }
+
+        private void clearEEPromBtn_Click(object sender, EventArgs e)
+        {
+            ClearEEProm();
         }
     }
 }

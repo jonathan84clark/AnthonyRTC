@@ -35,6 +35,8 @@
             this.connectBtn = new System.Windows.Forms.Button();
             this.disconnectBtn = new System.Windows.Forms.Button();
             this.updateTime = new System.Windows.Forms.Button();
+            this.addTimeBtn = new System.Windows.Forms.Button();
+            this.clearEEPromBtn = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // grnOnBtn
@@ -107,11 +109,33 @@
             this.updateTime.UseVisualStyleBackColor = true;
             this.updateTime.Click += new System.EventHandler(this.updateTime_Click);
             // 
+            // addTimeBtn
+            // 
+            this.addTimeBtn.Location = new System.Drawing.Point(279, 399);
+            this.addTimeBtn.Name = "addTimeBtn";
+            this.addTimeBtn.Size = new System.Drawing.Size(112, 39);
+            this.addTimeBtn.TabIndex = 7;
+            this.addTimeBtn.Text = "Add Time";
+            this.addTimeBtn.UseVisualStyleBackColor = true;
+            this.addTimeBtn.Click += new System.EventHandler(this.addTimeBtn_Click);
+            // 
+            // clearEEPromBtn
+            // 
+            this.clearEEPromBtn.Location = new System.Drawing.Point(87, 401);
+            this.clearEEPromBtn.Name = "clearEEPromBtn";
+            this.clearEEPromBtn.Size = new System.Drawing.Size(112, 39);
+            this.clearEEPromBtn.TabIndex = 8;
+            this.clearEEPromBtn.Text = "Clear All";
+            this.clearEEPromBtn.UseVisualStyleBackColor = true;
+            this.clearEEPromBtn.Click += new System.EventHandler(this.clearEEPromBtn_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.clearEEPromBtn);
+            this.Controls.Add(this.addTimeBtn);
             this.Controls.Add(this.updateTime);
             this.Controls.Add(this.disconnectBtn);
             this.Controls.Add(this.connectBtn);
@@ -134,6 +158,8 @@
         private System.Windows.Forms.Button connectBtn;
         private System.Windows.Forms.Button disconnectBtn;
         private System.Windows.Forms.Button updateTime;
+        private System.Windows.Forms.Button addTimeBtn;
+        private System.Windows.Forms.Button clearEEPromBtn;
     }
 }
 

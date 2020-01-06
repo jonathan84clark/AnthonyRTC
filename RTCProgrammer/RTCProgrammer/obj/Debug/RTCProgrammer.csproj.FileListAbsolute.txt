@@ -8,3 +8,13 @@ C:\Users\jonat\Desktop\RTCProgrammer\RTCProgrammer\RTCProgrammer\obj\Debug\RTCPr
 C:\Users\jonat\Desktop\RTCProgrammer\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.csproj.CoreCompileInputs.cache
 C:\Users\jonat\Desktop\RTCProgrammer\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.exe
 C:\Users\jonat\Desktop\RTCProgrammer\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.pdb
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\bin\Debug\RTCProgrammer.exe.config
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\bin\Debug\RTCProgrammer.exe
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\bin\Debug\RTCProgrammer.pdb
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.csprojAssemblyReference.cache
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.MainForm.resources
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.Properties.Resources.resources
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.csproj.GenerateResource.cache
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.csproj.CoreCompileInputs.cache
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.exe
+C:\Users\jonat\Documents\GitHub\AnthonyRTC\RTCProgrammer\RTCProgrammer\obj\Debug\RTCProgrammer.pdb
