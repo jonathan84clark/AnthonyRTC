@@ -187,7 +187,7 @@ void loop() {
                     flashOn = false;
                     flashRate = 100;
                     nextFlash = msTicks + flashRate;
-                    //SaveTime(clean_index);
+                    SaveTime(clean_index);
                 }
             }
             else if (commandSet[2] == 3)
