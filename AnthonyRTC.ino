@@ -259,7 +259,9 @@ void loop() {
       else
       {
         digitalWrite(GREEN_LED, LOW);
+        digitalWrite(RED_LED, HIGH);
       }
+      /*
       if ((ledsActive & 0x02) == 0x02)
       {
          digitalWrite(RED_LED, HIGH);
@@ -268,6 +270,7 @@ void loop() {
       {
          digitalWrite(RED_LED, LOW);
       }
+      */
       nextTick = msTicks + 1000;
   }
 }
