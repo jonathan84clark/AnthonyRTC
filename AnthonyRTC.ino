@@ -239,14 +239,16 @@ void loop() {
   if (nextTick < msTicks)
   {
       DateTime now = RTC.now();
-      SerialPrintTime(now);
+      long nowMin = now.hour() * 60 + now.minute();
       byte ledsActive = 0;
+
       for (int i = 0; i < NUM_TIME_EVENTS; i++)
       {
          if (timeEvents[i].active == 1)
          {
-             if (timeEvents[i].startHour <= now.hour() && timeEvents[i].startMinute <= now.minute() &&
-                 timeEvents[i].endHour >= now.hour() && timeEvents[i].endMinute >= now.minute())
+             long startTimeMin = timeEvents[i].startHour * 60 + timeEvents[i].startMinute;
+             long endTimeMin = timeEvents[i].endHour * 60 + timeEvents[i].endMinute;
+             if (startTimeMin <= nowMin && endTimeMin > nowMin)
              {
                 ledsActive |= timeEvents[i].color;      
              }
@@ -259,9 +261,7 @@ void loop() {
       else
       {
         digitalWrite(GREEN_LED, LOW);
-        digitalWrite(RED_LED, HIGH);
       }
-      /*
       if ((ledsActive & 0x02) == 0x02)
       {
          digitalWrite(RED_LED, HIGH);
@@ -270,7 +270,6 @@ void loop() {
       {
          digitalWrite(RED_LED, LOW);
       }
-      */
       nextTick = msTicks + 1000;
   }
 }
