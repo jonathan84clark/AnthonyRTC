@@ -287,12 +287,7 @@
             // 
             this.startHour.Location = new System.Drawing.Point(87, 239);
             this.startHour.Maximum = new decimal(new int[] {
-            23,
-            0,
-            0,
-            0});
-            this.startHour.Minimum = new decimal(new int[] {
-            1,
+            24,
             0,
             0,
             0});
@@ -309,12 +304,7 @@
             // 
             this.endHour.Location = new System.Drawing.Point(87, 274);
             this.endHour.Maximum = new decimal(new int[] {
-            23,
-            0,
-            0,
-            0});
-            this.endHour.Minimum = new decimal(new int[] {
-            1,
+            24,
             0,
             0,
             0});
