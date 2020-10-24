@@ -13,6 +13,8 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <EEPROM.h>
+#include "DS3231.h"
+#include <Wire.h>
 
 struct TimeFrame
 {
@@ -31,7 +33,11 @@ struct TimeFrame
 const char* ssid     = STASSID;
 const char* password = STAPSK;
 bool offlineMode = false;
+unsigned long msTicks = 0;
+unsigned long nextTick = 0;
 
+RTClib RTC;
+DS3231 Clock;
 TimeFrame sleepWakeupTime;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -226,6 +232,8 @@ void setup(void) {
   pinMode(led, OUTPUT);
   digitalWrite(led, 0);
   Serial.begin(115200);
+  // Start the I2C interface
+  Wire.begin();
   EEPROM.begin(128);
   ReadTimes();
   WiFi.begin(ssid, password);
@@ -276,6 +284,13 @@ void setup(void) {
       // GMT 0 = 0
       timeClient.setTimeOffset(-25200);
       timeClient.update();
+      //Clock.setYear(commandSet[3]);
+      //Clock.setMonth(commandSet[4]);
+      //Clock.setDate(commandSet[5]);
+      //Clock.setDoW(commandSet[6]);
+      //Clock.setHour(commandSet[7]);
+      //Clock.setMinute(commandSet[8]);
+      //Clock.setSecond(commandSet[9]);
       unsigned long epochTime = timeClient.getEpochTime();
       Serial.print("Hour: ");
       Serial.print(timeClient.getHours());
@@ -305,9 +320,32 @@ void setup(void) {
 
 void loop(void) 
 {
+   msTicks = millis();
    if (!offlineMode)
    {
       server.handleClient();
+   }
+   if (nextTick < msTicks)
+   {
+      DateTime now = RTC.now();
+      long nowMin = now.hour() * 60 + now.minute();
+      byte ledsActive = 0;
+
+      /*
+      for (int i = 0; i < NUM_TIME_EVENTS; i++)
+      {
+         if (timeEvents[i].active == 1)
+         {
+             long startTimeMin = timeEvents[i].startHour * 60 + timeEvents[i].startMinute;
+             long endTimeMin = timeEvents[i].endHour * 60 + timeEvents[i].endMinute;
+             if (startTimeMin <= nowMin && endTimeMin > nowMin)
+             {
+                ledsActive |= timeEvents[i].color;      
+             }
+         }
+      }
+      */
+      nextTick = msTicks + 1000;
    }
    
 }
