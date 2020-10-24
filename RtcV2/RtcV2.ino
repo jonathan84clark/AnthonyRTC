@@ -16,6 +16,12 @@
 #include "DS3231.h"
 #include <Wire.h>
 
+#define BRIGHT_GREEN_LEDS 12
+#define BRIGHT_RED_LEDS   14
+#define DIM_GREEN         10
+#define DIM_YELLOW         9
+#define DIM_RED           13
+
 struct TimeFrame
 {
    int startHour;
@@ -114,25 +120,12 @@ void ReadTimes()
    sleepWakeupTime.endHour = EEPROM.read(eeprom_addr++);
    sleepWakeupTime.endMinute = EEPROM.read(eeprom_addr++);
    sleepWakeupTime.greenMinutes = EEPROM.read(eeprom_addr++);
-   /*
-   Serial.print("Start: ");
-   Serial.print(sleepWakeupTime.startHour);
-   Serial.print(" : ");
-   Serial.print(sleepWakeupTime.startMinute);
-   Serial.print("End: ");
-   Serial.print(sleepWakeupTime.endHour);
-   Serial.print(" : ");
-   Serial.println(sleepWakeupTime.endMinute);
-   Serial.print("End minutes: ");
-   Serial.println(sleepWakeupTime.greenMinutes);
-   Serial.println("Times read from EEProm");
-   */
 }
 
 void handleRoot() {
-  digitalWrite(led, 1);
+  //digitalWrite(led, 1);
   server.send(200, "text/html", postForms);
-  digitalWrite(led, 0);
+  //digitalWrite(led, 0);
 }
 
 /*******************************************************
@@ -142,13 +135,13 @@ void handlePlain()
 {
    if (server.method() != HTTP_POST) 
    {
-      digitalWrite(led, 1);
+      //digitalWrite(led, 1);
       //server.send(405, "text/plain", "Method Not Allowed");
-      digitalWrite(led, 0);
+      //digitalWrite(led, 0);
    } 
    else 
    {
-      digitalWrite(led, 1);
+      //digitalWrite(led, 1);
       server.send(200, "text/plain", "POST body was:\n" + server.arg("plain"));
       String parsedArgs = server.arg("plain");
       String value = "";
@@ -202,7 +195,7 @@ void handlePlain()
          SaveTimes();
       }
       Serial.println(parsedArgs);
-      digitalWrite(led, 0);
+      //digitalWrite(led, 0);
    }
 }
 
@@ -211,7 +204,7 @@ void handlePlain()
 ******************************************************/
 void handleNotFound() 
 {
-   digitalWrite(led, 1);
+   //digitalWrite(led, 1);
    String message = "File Not Found\n\n";
    message += "URI: ";
    message += server.uri();
@@ -225,11 +218,86 @@ void handleNotFound()
       message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
    }
    server.send(404, "text/plain", message);
-   digitalWrite(led, 0);
+   //digitalWrite(led, 0);
+}
+
+/******************************************************
+* UPDATES THE RTC WITH THE NTP TIME
+******************************************************/
+void UpdateRtc()
+{
+    timeClient.update();
+    unsigned long epochTime = timeClient.getEpochTime();
+    struct tm *ptm = gmtime ((time_t *)&epochTime); 
+    int monthDay = ptm->tm_mday;
+    // First lets see if the RTC needs an update
+    DateTime now = RTC.now();
+    //if (now.year() != ptm->tm_year+1900 || now.month() != ptm->tm_mon+1 || 
+    //    now.day() != ptm->tm_mday || )
+    if (now.year() != ptm->tm_year+1900 || now.month() != ptm->tm_mon+1 || now.hour() != timeClient.getHours() ||
+        now.minute() != timeClient.getMinutes())
+    {
+       Serial.println("Updating RTC...");
+       Clock.setYear(ptm->tm_year+1900);
+       Clock.setMonth(ptm->tm_mon+1);
+       Clock.setDate(ptm->tm_mday);
+       Clock.setDoW(timeClient.getDay());
+       Clock.setHour(timeClient.getHours());
+       Clock.setMinute(timeClient.getMinutes());
+       Clock.setSecond(timeClient.getSeconds());
+    }
+    else
+    {
+       Serial.println("RTC time valid");
+    }
+}
+
+/******************************************************
+* CHECKS AND SETS THE RED STATE
+* DESC: This check occures on start to ensure we get into 
+* the proper state if the device is plugged in late
+******************************************************/
+void SetupLEDStates()
+{
+   DateTime now = RTC.now();
+   long nowMin = now.hour() * 60 + now.minute();
+   byte ledsActive = 0;
+   long startTimeMin = sleepWakeupTime.startHour * 60 + sleepWakeupTime.startMinute;
+   long endTimeMin = sleepWakeupTime.endHour * 60 + sleepWakeupTime.endMinute;
+   long endGreenState = endTimeMin + sleepWakeupTime.greenMinutes;
+    // If we are betwee our start time and midnight or we are before our
+    // end time in the early morning, turn red
+    
+    if (startTimeMin < nowMin && nowMin < 1440 || nowMin <= endTimeMin)
+    {
+       digitalWrite(BRIGHT_RED_LEDS, HIGH);  
+    }
+    else
+    {
+       digitalWrite(BRIGHT_RED_LEDS, LOW);
+    }
+    if (endTimeMin < nowMin && nowMin <= endGreenState)
+    {
+        digitalWrite(BRIGHT_GREEN_LEDS, HIGH);
+    }
+    else
+    {
+       digitalWrite(BRIGHT_GREEN_LEDS, LOW);
+    }
 }
 
 void setup(void) {
   pinMode(led, OUTPUT);
+  pinMode(BRIGHT_GREEN_LEDS, OUTPUT);
+  pinMode(BRIGHT_RED_LEDS, OUTPUT);
+  pinMode(DIM_GREEN, OUTPUT);
+  pinMode(DIM_YELLOW, OUTPUT);
+  pinMode(DIM_RED, OUTPUT);
+  digitalWrite(BRIGHT_GREEN_LEDS, LOW);
+  digitalWrite(BRIGHT_RED_LEDS, LOW);
+  digitalWrite(DIM_GREEN, LOW);
+  digitalWrite(DIM_YELLOW, LOW);
+  digitalWrite(DIM_RED, HIGH);
   digitalWrite(led, 0);
   Serial.begin(115200);
   // Start the I2C interface
@@ -239,6 +307,12 @@ void setup(void) {
   WiFi.begin(ssid, password);
   Serial.println("");
   int offlineIndex = 0;
+  sleepWakeupTime.endHour = 23;
+  sleepWakeupTime.endMinute = 55;
+  sleepWakeupTime.startHour = 23;
+  sleepWakeupTime.startMinute = 53;
+  sleepWakeupTime.greenMinutes = 2;
+  
 
   // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
@@ -248,6 +322,9 @@ void setup(void) {
     {
         Serial.println("Internet not available!");
         offlineMode = true;
+        digitalWrite(DIM_GREEN, LOW);
+        digitalWrite(DIM_YELLOW, HIGH);
+        digitalWrite(DIM_RED, LOW);
         offlineIndex++;
         if (offlineIndex >= 10)
         {
@@ -258,13 +335,15 @@ void setup(void) {
     {
         Serial.println("Internet connection failed!");
         offlineMode = true;
+        digitalWrite(DIM_GREEN, LOW);
+        digitalWrite(DIM_YELLOW, LOW);
+        digitalWrite(DIM_RED, HIGH);
         offlineIndex++;
         if (offlineIndex >= 10)
         {
            break;
         }
     }
-    Serial.println(WiFi.status());
   }
   if (!offlineMode)
   {
@@ -273,6 +352,9 @@ void setup(void) {
       Serial.println(ssid);
       Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
+      digitalWrite(DIM_GREEN, HIGH);
+      digitalWrite(DIM_YELLOW, LOW);
+      digitalWrite(DIM_RED, LOW);
 
       // Initialize a NTPClient to get time
       timeClient.begin();
@@ -283,21 +365,8 @@ void setup(void) {
       // GMT -7 = -25200
       // GMT 0 = 0
       timeClient.setTimeOffset(-25200);
-      timeClient.update();
-      //Clock.setYear(commandSet[3]);
-      //Clock.setMonth(commandSet[4]);
-      //Clock.setDate(commandSet[5]);
-      //Clock.setDoW(commandSet[6]);
-      //Clock.setHour(commandSet[7]);
-      //Clock.setMinute(commandSet[8]);
-      //Clock.setSecond(commandSet[9]);
-      unsigned long epochTime = timeClient.getEpochTime();
-      Serial.print("Hour: ");
-      Serial.print(timeClient.getHours());
-      Serial.print(":");
-      Serial.print(timeClient.getMinutes());
-      Serial.print(":");
-      Serial.println(timeClient.getSeconds());
+      UpdateRtc();
+      
 
       if (MDNS.begin("esp8266")) {
           Serial.println("MDNS responder started");
@@ -316,6 +385,7 @@ void setup(void) {
    {
      Serial.println("System starting in offline mode");
    }
+   //SetupLEDStates();
 }
 
 void loop(void) 
@@ -329,22 +399,34 @@ void loop(void)
    {
       DateTime now = RTC.now();
       long nowMin = now.hour() * 60 + now.minute();
-      byte ledsActive = 0;
 
-      /*
-      for (int i = 0; i < NUM_TIME_EVENTS; i++)
+      byte ledsActive = 0;
+      long startTimeMin = sleepWakeupTime.startHour * 60 + sleepWakeupTime.startMinute;
+      long endTimeMin = sleepWakeupTime.endHour * 60 + sleepWakeupTime.endMinute;
+      long endGreenState = endTimeMin + sleepWakeupTime.greenMinutes;
+      Serial.print("Start: ");
+      Serial.print(startTimeMin);
+      Serial.print(" End: ");
+      Serial.print(endTimeMin);
+      Serial.print(" Now: ");
+      Serial.print(nowMin);
+      Serial.print(" EndGrn: ");
+      Serial.println(endGreenState);
+      if (endTimeMin <= nowMin && nowMin <= endGreenState)
       {
-         if (timeEvents[i].active == 1)
-         {
-             long startTimeMin = timeEvents[i].startHour * 60 + timeEvents[i].startMinute;
-             long endTimeMin = timeEvents[i].endHour * 60 + timeEvents[i].endMinute;
-             if (startTimeMin <= nowMin && endTimeMin > nowMin)
-             {
-                ledsActive |= timeEvents[i].color;      
-             }
-         }
+         digitalWrite(BRIGHT_GREEN_LEDS, HIGH);  
+         digitalWrite(BRIGHT_RED_LEDS, LOW);  
       }
-      */
+      else if (startTimeMin <= nowMin)
+      {
+         digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
+         digitalWrite(BRIGHT_RED_LEDS, HIGH);  
+      }
+      else if (nowMin >= endGreenState && nowMin <= startTimeMin)
+      {
+         digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
+         digitalWrite(BRIGHT_RED_LEDS, LOW);
+      }
       nextTick = msTicks + 1000;
    }
    
