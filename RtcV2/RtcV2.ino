@@ -6,6 +6,8 @@
 * Author: Jonathan L Clark
 * Date: 10/22/2020
 ********************************************************************/
+#include <DHT.h>
+#include <DHT_U.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -16,11 +18,14 @@
 #include "DS3231.h"
 #include <Wire.h>
 
+#define DHTTYPE DHT11   // DHT 11
+#define DHTPIN 13     // Digital pin connected to the DHT sensor
+
 #define BRIGHT_GREEN_LEDS 12
 #define BRIGHT_RED_LEDS   14
 #define DIM_GREEN         10
 #define DIM_YELLOW         9
-#define DIM_RED           13
+#define DIM_RED           15
 
 struct TimeFrame
 {
@@ -30,6 +35,19 @@ struct TimeFrame
    int endMinute;
    int greenMinutes;
 };
+
+struct TimeCache
+{
+   int year;
+   int month;
+   int day;
+   int hour;
+   int minute;
+   int second;
+};
+
+float temperature;
+float humidity;
 
 #ifndef STASSID
 #define STASSID "JLC1"
@@ -42,12 +60,23 @@ bool offlineMode = false;
 unsigned long msTicks = 0;
 unsigned long nextTick = 0;
 
+TimeCache cachedTime;
 RTClib RTC;
 DS3231 Clock;
 TimeFrame sleepWakeupTime;
+DHT dht(DHTPIN, DHTTYPE);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 ESP8266WebServer server(80);
+
+// Set your Static IP address
+IPAddress local_IP(192, 168, 1, 190);
+// Set your Gateway IP address
+IPAddress gateway(192, 168, 1, 1);
+
+IPAddress subnet(255, 255, 0, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
 
 const int led = LED_BUILTIN;
 
@@ -59,7 +88,7 @@ const String postForms = "<html>\
     </style>\
   </head>\
   <body>\
-    <h1>Add Time</h1><br>\
+    <h1>Set Time</h1><br>\
     <form method=\"post\" enctype=\"text/plain\" action=\"/postTime/\">\
       <p>Start Red</p>\
       <select name=\"startTime\" id=\"startRedTime\">\
@@ -129,6 +158,49 @@ void handleRoot() {
 }
 
 /*******************************************************
+* LEADING ZERO
+* DESC: Produces a string with a leading zero based on an int
+* if that int is less than 10.
+*******************************************************/
+String leadingZero(int input)
+{
+   String output = String(input);
+   if (input < 10)
+   {
+      output = "0" + output;
+   }
+   return output;
+}
+/*******************************************************
+* GET DATA
+* DESC: Produces system data.
+*******************************************************/
+void getData()
+{
+   if (server.method() != HTTP_POST) 
+   {
+      String timeString = String(cachedTime.month) + "/";
+      timeString += String(cachedTime.day) + " ";
+      //timeString += String(cachedTime.year) + " "; Year is invalid for this RTC not sure why
+      timeString += leadingZero(cachedTime.hour) + ":";
+      timeString += leadingZero(cachedTime.minute) + ":";
+      timeString += leadingZero(cachedTime.second);
+      String wakeupString = String(sleepWakeupTime.endHour * 100 + sleepWakeupTime.endMinute);
+      String sleepString = String(sleepWakeupTime.startHour * 100 + sleepWakeupTime.startMinute);
+      String dataString = "{\"rtc_date_time\" : \"" + timeString + "\"}";
+      dataString += ",{\"wakeup_time\" : " + wakeupString + "}";
+      dataString += ",{\"sleep_time\"  : " + sleepString + "}";
+      dataString += ",{\"temperature\" : " + String(temperature) + "}";
+      dataString += ",{\"humidity\" : " + String(humidity) + "}";
+      server.send(405, "text/plain", dataString);
+   } 
+   else
+   {
+      
+   }
+}
+
+/*******************************************************
 * HANDLES A PLAIN POST
 *******************************************************/
 void handlePlain() 
@@ -141,7 +213,6 @@ void handlePlain()
    } 
    else 
    {
-      //digitalWrite(led, 1);
       server.send(200, "text/plain", "POST body was:\n" + server.arg("plain"));
       String parsedArgs = server.arg("plain");
       String value = "";
@@ -195,7 +266,6 @@ void handlePlain()
          SaveTimes();
       }
       Serial.println(parsedArgs);
-      //digitalWrite(led, 0);
    }
 }
 
@@ -204,7 +274,6 @@ void handlePlain()
 ******************************************************/
 void handleNotFound() 
 {
-   //digitalWrite(led, 1);
    String message = "File Not Found\n\n";
    message += "URI: ";
    message += server.uri();
@@ -218,7 +287,6 @@ void handleNotFound()
       message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
    }
    server.send(404, "text/plain", message);
-   //digitalWrite(led, 0);
 }
 
 /******************************************************
@@ -232,9 +300,7 @@ void UpdateRtc()
     int monthDay = ptm->tm_mday;
     // First lets see if the RTC needs an update
     DateTime now = RTC.now();
-    //if (now.year() != ptm->tm_year+1900 || now.month() != ptm->tm_mon+1 || 
-    //    now.day() != ptm->tm_mday || )
-    if (now.year() != ptm->tm_year+1900 || now.month() != ptm->tm_mon+1 || now.hour() != timeClient.getHours() ||
+    if (now.month() != ptm->tm_mon+1 || now.hour() != timeClient.getHours() ||
         now.minute() != timeClient.getMinutes())
     {
        Serial.println("Updating RTC...");
@@ -249,40 +315,6 @@ void UpdateRtc()
     else
     {
        Serial.println("RTC time valid");
-    }
-}
-
-/******************************************************
-* CHECKS AND SETS THE RED STATE
-* DESC: This check occures on start to ensure we get into 
-* the proper state if the device is plugged in late
-******************************************************/
-void SetupLEDStates()
-{
-   DateTime now = RTC.now();
-   long nowMin = now.hour() * 60 + now.minute();
-   byte ledsActive = 0;
-   long startTimeMin = sleepWakeupTime.startHour * 60 + sleepWakeupTime.startMinute;
-   long endTimeMin = sleepWakeupTime.endHour * 60 + sleepWakeupTime.endMinute;
-   long endGreenState = endTimeMin + sleepWakeupTime.greenMinutes;
-    // If we are betwee our start time and midnight or we are before our
-    // end time in the early morning, turn red
-    
-    if (startTimeMin < nowMin && nowMin < 1440 || nowMin <= endTimeMin)
-    {
-       digitalWrite(BRIGHT_RED_LEDS, HIGH);  
-    }
-    else
-    {
-       digitalWrite(BRIGHT_RED_LEDS, LOW);
-    }
-    if (endTimeMin < nowMin && nowMin <= endGreenState)
-    {
-        digitalWrite(BRIGHT_GREEN_LEDS, HIGH);
-    }
-    else
-    {
-       digitalWrite(BRIGHT_GREEN_LEDS, LOW);
     }
 }
 
@@ -302,17 +334,16 @@ void setup(void) {
   Serial.begin(115200);
   // Start the I2C interface
   Wire.begin();
+  dht.begin();
   EEPROM.begin(128);
   ReadTimes();
   WiFi.begin(ssid, password);
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS))
+  {
+     Serial.println("STA Failed to configure");
+  }
   Serial.println("");
   int offlineIndex = 0;
-  sleepWakeupTime.endHour = 23;
-  sleepWakeupTime.endMinute = 55;
-  sleepWakeupTime.startHour = 23;
-  sleepWakeupTime.startMinute = 53;
-  sleepWakeupTime.greenMinutes = 2;
-  
 
   // Wait for connection
   while (WiFi.status() != WL_CONNECTED) {
@@ -374,7 +405,9 @@ void setup(void) {
 
       server.on("/", handleRoot);
 
-      server.on("/postTime/", handlePlain);
+      server.on("/postTime", handlePlain);
+
+      server.on("/data", getData);
 
       server.onNotFound(handleNotFound);
 
@@ -404,28 +437,29 @@ void loop(void)
       long startTimeMin = sleepWakeupTime.startHour * 60 + sleepWakeupTime.startMinute;
       long endTimeMin = sleepWakeupTime.endHour * 60 + sleepWakeupTime.endMinute;
       long endGreenState = endTimeMin + sleepWakeupTime.greenMinutes;
-      Serial.print("Start: ");
-      Serial.print(startTimeMin);
-      Serial.print(" End: ");
-      Serial.print(endTimeMin);
-      Serial.print(" Now: ");
-      Serial.print(nowMin);
-      Serial.print(" EndGrn: ");
-      Serial.println(endGreenState);
-      if (endTimeMin <= nowMin && nowMin <= endGreenState)
+      temperature = dht.readTemperature(true);
+      humidity = dht.readHumidity();
+      // Cache the time for the server
+      cachedTime.year = now.year();
+      cachedTime.month = now.month();
+      cachedTime.day = now.day();
+      cachedTime.hour = now.hour();
+      cachedTime.minute = now.minute();
+      cachedTime.second = now.second();
+      if (nowMin >= endTimeMin && nowMin < endGreenState)
       {
          digitalWrite(BRIGHT_GREEN_LEDS, HIGH);  
          digitalWrite(BRIGHT_RED_LEDS, LOW);  
       }
-      else if (startTimeMin <= nowMin)
-      {
-         digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
-         digitalWrite(BRIGHT_RED_LEDS, HIGH);  
-      }
-      else if (nowMin >= endGreenState && nowMin <= startTimeMin)
+      else if (nowMin >= endGreenState && nowMin < startTimeMin)
       {
          digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
          digitalWrite(BRIGHT_RED_LEDS, LOW);
+      }
+      else if (nowMin >= startTimeMin || nowMin < endTimeMin)
+      {
+         digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
+         digitalWrite(BRIGHT_RED_LEDS, HIGH);  
       }
       nextTick = msTicks + 1000;
    }
