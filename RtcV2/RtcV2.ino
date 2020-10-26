@@ -405,7 +405,7 @@ void setup(void) {
 
       server.on("/", handleRoot);
 
-      server.on("/postTime", handlePlain);
+      server.on("/postTime/", handlePlain);
 
       server.on("/data", getData);
 
@@ -446,6 +446,10 @@ void loop(void)
       cachedTime.hour = now.hour();
       cachedTime.minute = now.minute();
       cachedTime.second = now.second();
+      //Serial.print("Start time: ");
+      //Serial.print(startTimeMin);
+      //Serial.print("Now: ");
+      //Serial.println(nowMin);
       if (nowMin >= endTimeMin && nowMin < endGreenState)
       {
          digitalWrite(BRIGHT_GREEN_LEDS, HIGH);  
