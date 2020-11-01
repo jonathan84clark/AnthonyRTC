@@ -59,6 +59,7 @@ const char* password = STAPSK;
 bool offlineMode = false;
 unsigned long msTicks = 0;
 unsigned long nextTick = 0;
+long set_rtc_time = -1;
 
 TimeCache cachedTime;
 RTClib RTC;
@@ -92,6 +93,7 @@ const String postForms = "<html>\
     <form method=\"post\" enctype=\"text/plain\" action=\"/postTime/\">\
       <p>Start Red</p>\
       <select name=\"startTime\" id=\"startRedTime\">\
+         <option value=\"-1\">----</option>\
          <option value=\"1800\">6:00 PM</option>\
          <option value=\"1900\">7:00 PM</option>\
          <option value=\"1915\">7:15 PM</option>\
@@ -99,6 +101,7 @@ const String postForms = "<html>\
       </select>\
       <p>End Red</p>\
       <select name=\"endTime\" id=\"startGreenTime\">\
+         <option value=\"-1\">----</option>\
          <option value=\"500\">5:00 AM</option>\
          <option value=\"530\">5:30 AM</option>\
          <option value=\"600\">6:00 AM</option>\
@@ -111,6 +114,7 @@ const String postForms = "<html>\
       </select>\
       <p>Green Time</p>\
       <select name=\"greenTime\" id=\"greenTime\">\
+         <option value=\"-1\">---</option>\
          <option value=\"10\">10 min</option>\
          <option value=\"20\">20 min</option>\
          <option value=\"30\">30 min</option>\
@@ -118,7 +122,11 @@ const String postForms = "<html>\
          <option value=\"50\">50 min</option>\
          <option value=\"60\">60 min</option>\
       </select>\
-      <input type=\"submit\" value=\"Set\">\
+      <br><input type=\"submit\" value=\"Set\">\
+    </form>\
+    <h1>Update RTC Time</h1><br>\
+    <form method=\"post\" enctype=\"text/plain\" action=\"/updateRtc/\">\
+      <input type=\"submit\" value=\"Update RTC\">\
     </form>\
   </body>\
 </html>";
@@ -171,33 +179,38 @@ String leadingZero(int input)
    }
    return output;
 }
+
+/*******************************************************
+* GET DATA
+* DESC: Produces system data.
+*******************************************************/
+void updateRTC()
+{
+   server.send(405, "text/plain", "OK");
+   set_rtc_time = millis() + 1000; // Do this in a second
+}
+
 /*******************************************************
 * GET DATA
 * DESC: Produces system data.
 *******************************************************/
 void getData()
 {
-   if (server.method() != HTTP_POST) 
-   {
-      String timeString = String(cachedTime.month) + "/";
-      timeString += String(cachedTime.day) + " ";
-      //timeString += String(cachedTime.year) + " "; Year is invalid for this RTC not sure why
-      timeString += leadingZero(cachedTime.hour) + ":";
-      timeString += leadingZero(cachedTime.minute) + ":";
-      timeString += leadingZero(cachedTime.second);
-      String wakeupString = String(sleepWakeupTime.endHour * 100 + sleepWakeupTime.endMinute);
-      String sleepString = String(sleepWakeupTime.startHour * 100 + sleepWakeupTime.startMinute);
-      String dataString = "{\"rtc_date_time\" : \"" + timeString + "\"}";
-      dataString += ",{\"wakeup_time\" : " + wakeupString + "}";
-      dataString += ",{\"sleep_time\"  : " + sleepString + "}";
-      dataString += ",{\"temperature\" : " + String(temperature) + "}";
-      dataString += ",{\"humidity\" : " + String(humidity) + "}";
-      server.send(405, "text/plain", dataString);
-   } 
-   else
-   {
-      
-   }
+   String timeString = String(cachedTime.month) + "/";
+   timeString += String(cachedTime.day) + "/";
+   timeString += String((cachedTime.year % 100) + 2000) + " "; // Year only stored as 2-digit number, this wont work in the year 2100
+   timeString += leadingZero(cachedTime.hour) + ":";
+   timeString += leadingZero(cachedTime.minute) + ":";
+   timeString += leadingZero(cachedTime.second);
+   String wakeupString = String(sleepWakeupTime.endHour * 100 + sleepWakeupTime.endMinute);
+   String sleepString = String(sleepWakeupTime.startHour * 100 + sleepWakeupTime.startMinute);
+   String dataString = "{\"rtc_date_time\" : \"" + timeString + "\"}";
+   dataString += ",{\"wakeup_time\" : " + wakeupString + "}";
+   dataString += ",{\"sleep_time\"  : " + sleepString + "}";
+   dataString += ",{\"stay_green_min\"  : " + String(sleepWakeupTime.greenMinutes) + "}";
+   dataString += ",{\"temperature\" : " + String(temperature) + "}";
+   dataString += ",{\"humidity\" : " + String(humidity) + "}";
+   server.send(200, "text/plain", dataString);
 }
 
 /*******************************************************
@@ -207,9 +220,7 @@ void handlePlain()
 {
    if (server.method() != HTTP_POST) 
    {
-      //digitalWrite(led, 1);
-      //server.send(405, "text/plain", "Method Not Allowed");
-      //digitalWrite(led, 0);
+      server.send(405, "text/plain", "Method Not Allowed");
    } 
    else 
    {
@@ -237,21 +248,27 @@ void handlePlain()
               int intVal = tempString.toInt();
               int hours = intVal / 100;
               int minutes = intVal % 100;
-              if (key == "startTime")
+              if (key == "startTime" && intVal != -1)
               {
                  sleepWakeupTime.startHour = hours;
                  sleepWakeupTime.startMinute = minutes;
+                 saveTime = true;
               }
-              else if (key == "endTime")
+              else if (key == "endTime" && intVal != -1)
               {
                  sleepWakeupTime.endHour = hours;
                  sleepWakeupTime.endMinute = minutes;
+                 saveTime = true;
+              }
+              else if (intVal != -1)
+              {
+                 sleepWakeupTime.greenMinutes = intVal;
+                 saveTime = true;
               }
               else
               {
-                 sleepWakeupTime.greenMinutes = intVal;
+                 Serial.println("Will not set key: " + key);
               }
-              saveTime = true;
               nextDelim = '=';
            }
            tempString = "";
@@ -297,18 +314,24 @@ void UpdateRtc()
     timeClient.update();
     unsigned long epochTime = timeClient.getEpochTime();
     struct tm *ptm = gmtime ((time_t *)&epochTime); 
-    int monthDay = ptm->tm_mday;
+    int hour = timeClient.getHours();
+    int numeric_month = ptm->tm_mon+1;
+    // Account for daylight savings time (assume update time is not midnight)
+    if (ptm->tm_mon+1 >= 11 || numeric_month < 3 || numeric_month == 3 && ptm->tm_mday < 8)
+    {
+       hour -= 1;
+    }
     // First lets see if the RTC needs an update
     DateTime now = RTC.now();
-    if (now.month() != ptm->tm_mon+1 || now.hour() != timeClient.getHours() ||
-        now.minute() != timeClient.getMinutes())
+    if (now.month() != numeric_month || now.hour() != hour ||
+        now.minute() != timeClient.getMinutes() || now.year() % 100 != (ptm->tm_year+1900) % 100)
     {
        Serial.println("Updating RTC...");
-       Clock.setYear(ptm->tm_year+1900);
-       Clock.setMonth(ptm->tm_mon+1);
+       Clock.setYear((ptm->tm_year+1900) % 100);
+       Clock.setMonth(numeric_month);
        Clock.setDate(ptm->tm_mday);
        Clock.setDoW(timeClient.getDay());
-       Clock.setHour(timeClient.getHours());
+       Clock.setHour(hour);
        Clock.setMinute(timeClient.getMinutes());
        Clock.setSecond(timeClient.getSeconds());
     }
@@ -409,6 +432,8 @@ void setup(void) {
 
       server.on("/data", getData);
 
+      server.on("/updateRtc/", updateRTC);
+
       server.onNotFound(handleNotFound);
 
       server.begin();
@@ -427,6 +452,11 @@ void loop(void)
    if (!offlineMode)
    {
       server.handleClient();
+   }
+   if (set_rtc_time > -1 && set_rtc_time < msTicks)
+   {
+      UpdateRtc();
+      set_rtc_time = -1;
    }
    if (nextTick < msTicks)
    {
