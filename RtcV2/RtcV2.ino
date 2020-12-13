@@ -3,6 +3,8 @@
 * DESC: This is the second iteration of Anthony's RTC. This one being more advanced,
 * with a WiFi interface. This device is able to automatically update for daylight savings
 * time. It is also capable of providing a web interface for setting wakeup times. 
+* Install an NTP client from
+* https://randomnerdtutorials.com/esp8266-nodemcu-date-time-ntp-client-server-arduino/
 * Author: Jonathan L Clark
 * Date: 10/22/2020
 ********************************************************************/
@@ -26,6 +28,9 @@
 #define DIM_GREEN         10
 #define DIM_YELLOW         9
 #define DIM_RED           15
+
+#define RED_BRIGHTNESSS 170
+#define GREEN_BRIGHTNESSS 180
 
 struct TimeFrame
 {
@@ -482,7 +487,7 @@ void loop(void)
       //Serial.println(nowMin);
       if (nowMin >= endTimeMin && nowMin < endGreenState)
       {
-         digitalWrite(BRIGHT_GREEN_LEDS, HIGH);  
+         analogWrite(BRIGHT_GREEN_LEDS, GREEN_BRIGHTNESSS);  
          digitalWrite(BRIGHT_RED_LEDS, LOW);  
       }
       else if (nowMin >= endGreenState && nowMin < startTimeMin)
@@ -493,7 +498,7 @@ void loop(void)
       else if (nowMin >= startTimeMin || nowMin < endTimeMin)
       {
          digitalWrite(BRIGHT_GREEN_LEDS, LOW);  
-         digitalWrite(BRIGHT_RED_LEDS, HIGH);  
+         analogWrite(BRIGHT_RED_LEDS, RED_BRIGHTNESSS);  
       }
       nextTick = msTicks + 1000;
    }
