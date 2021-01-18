@@ -14,12 +14,18 @@ from PIL import Image, ImageDraw, ImageFont
 import adafruit_rgb_display.ili9341 as ili9341
 from threading import Thread
 import time
-from datetime import datetime
+from datetime import datetime, date
 import os
 from random import shuffle
 from pygame import mixer
+import RPi.GPIO as GPIO
 
 FMT = '%H:%M:%S'
+SLEEP_START_STR = "19:30:00"
+BEGIN_WAKE_STR = "6:00:00"
+DISPLAY_START_STR = "2:00:00"
+SLEEP_END_STR = "6:30:00"
+MUSIC_SWITCH_STR = "21:00:00"
 
 # First define some constants to allow easy resizing of shapes.
 BORDER = 20
@@ -29,12 +35,34 @@ FONTSIZE = 150
 cs_pin = digitalio.DigitalInOut(board.CE0)
 dc_pin = digitalio.DigitalInOut(board.D4)
 reset_pin = digitalio.DigitalInOut(board.D24)
+lcd_led = 16
+RED_LED = 13
+GREEN_LED = 12
+WHITE_LEDS = 18
+
+GPIO.setmode(GPIO.BCM)            # choose BCM or BOARD  
+GPIO.setup(lcd_led, GPIO.OUT) # set a port/pin as an output   
  
 # Config for display baudrate (default max is 24mhz):
 BAUDRATE = 24000000
+RED_BRIGHTNESS = 50.0
+GREEN_BRIGHTNESS = 50.0
+WHITE_BRIGHTNESS = 50.0
 
 class AnthonyRTC:
     def __init__(self):
+        GPIO.setup(RED_LED, GPIO.OUT)
+        GPIO.setup(GREEN_LED, GPIO.OUT)
+        GPIO.setup(WHITE_LEDS, GPIO.OUT)
+        
+        self.red_led = GPIO.PWM(RED_LED, RED_BRIGHTNESS)
+        self.green_led = GPIO.PWM(GREEN_LED, GREEN_BRIGHTNESS)
+        self.white_led = GPIO.PWM(WHITE_LEDS, WHITE_BRIGHTNESS)
+        
+        self.red_led.start(0)
+        self.green_led.start(0)
+        self.white_led.start(0)
+        
         # Setup SPI bus using hardware SPI:
         spi = board.SPI()
          
@@ -66,6 +94,12 @@ class AnthonyRTC:
          
         # Load a TTF Font
         self.font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONTSIZE)
+        
+        self.music_change_tm = datetime.strptime(MUSIC_SWITCH_STR, FMT).time()
+        self.sleep_end_tm = datetime.strptime(SLEEP_END_STR, FMT).time()
+        self.sleep_start_tm = datetime.strptime(SLEEP_START_STR, FMT).time()
+        self.begin_wake_tm = datetime.strptime(BEGIN_WAKE_STR, FMT).time()
+        self.display_start_tm = datetime.strptime(DISPLAY_START_STR, FMT).time()
 
         sound_thread = Thread(target = self.SoundMachine)
         sound_thread.daemon = True
@@ -77,92 +111,109 @@ class AnthonyRTC:
 
     # Manage the sleep light
     def SleepLight(self):
-        red_start_time = "19:00:00"
-        green_time_str = "10:00:00" #"6:00:00"
-        display_time_str = "9:00:00" #"2:00:00"
         mid_night = datetime.strptime("23:59:59", FMT).time()
-        red_time = datetime.strptime(red_start_time, FMT).time()
-        green_time = datetime.strptime(green_time_str, FMT).time()
-        green_end_time = datetime.strptime("6:30:00", FMT).time()
-        display_time = datetime.strptime(display_time_str, FMT).time()
-        #now = datetime.strptime("2:31:00", FMT)
 
         while (True):
             now = datetime.now().time()
-            print(now)
-            if ((now > red_time and now < mid_night) or now < green_time):
-                print("Red:")
+            if ((now > self.sleep_start_tm and now < mid_night) or now < self.begin_wake_tm):
+                #print("Red")
+                self.red_led.ChangeDutyCycle(RED_BRIGHTNESS)
+                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                self.green_led.ChangeDutyCycle(0)
 
-            elif (now > green_time and now < green_end_time):
+            elif (now > self.begin_wake_tm and now < self.sleep_end_tm):
                 print("Green")
+                self.green_led.ChangeDutyCycle(GREEN_BRIGHTNESS)
+                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                self.red_led.ChangeDutyCycle(0)
             else:
                 print("Off")
-                
-            print(now)
-            print(display_time)
-            if (now > display_time and now < green_time):
-                print(green_time.hour)
-                #tdelta = green_time - now
-                #if tdelta.seconds < 60:
-                #    print(int(tdelta.seconds))
-                #    self.DisplayCount(int(tdelta.seconds))
-                #else:
-                #    print(int(tdelta.seconds / 60.0))
-                #    self.DisplayCount(int(tdelta.seconds / 60.0))
+                self.green_led.ChangeDutyCycle(0)
+                self.red_led.ChangeDutyCycle(0)
+                self.white_led.ChangeDutyCycle(0)
+
+            if (now > self.display_start_tm and now < self.begin_wake_tm):
+                GPIO.output(lcd_led, 1)  
+                tdelta = datetime.combine(date.today(), self.begin_wake_tm) - datetime.combine(date.today(), now)
+                if tdelta.seconds < 60:
+                    print(int(tdelta.seconds))
+                    self.DisplayCount(int(tdelta.seconds))
+                else:
+                    print(int(tdelta.seconds / 60.0))
+                    self.DisplayCount(int(tdelta.seconds / 60.0))
                     
             else:
-                print("Display off")
+                GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
+                #print("Display off")
             time.sleep(1)
 
     # Function to operate the sound machine
     def SoundMachine(self):
-        sound_start_time_str = "8:00:00"
-        sound_start_time = datetime.strptime(sound_start_time_str, FMT)
-        
-        nature_switch_time_str = "21:00:00"
-        nature_switch_time = datetime.strptime(nature_switch_time_str, FMT)
-
         # Anthony
         sound_directory = "/home/pi/Music/KidsSoundMachineSleep/"
         white_sound = "/home/pi/Music/KidsSoundMachineSleep/FlowingWater.mp3"
         white_sound2 = "/home/pi/Music/KidsSoundMachineSleep/FlowingCreek.mp3"
         white_sound3 = "/home/pi/Music/KidsSoundMachineSleep/BabblingBrook.mp3"
-        music_files = []
-        for file in os.listdir(sound_directory):
-            if file.endswith(".mp3"):
-                file_name = os.path.join(sound_directory, file)
-                if not file_name == white_sound and not file_name == white_sound2 and not file_name == white_sound3:
-                    music_files.append(file_name)
-                #print(os.path.join(sound_directory, file))
-
-        shuffle(music_files) # Make sure we have random music each time
         mixer.init()
-        sound_index = 0
+        
+        while (True): # Main loop will run forever and ever and ever
+            music_files = []
+            for file in os.listdir(sound_directory):
+                if file.endswith(".mp3"):
+                    file_name = os.path.join(sound_directory, file)
+                    if not file_name == white_sound and not file_name == white_sound2 and not file_name == white_sound3:
+                        music_files.append(file_name)
+                    #print(os.path.join(sound_directory, file))
 
-        # First we play primary music
-        while (True):
-            if not mixer.music.get_busy():
-                mixer.music.stop()
-                mixer.music.load(music_files[sound_index])
-                mixer.music.play()
-                print("Song switched to: " + music_files[sound_index])
-                sound_index += 1
-                # Reached the end of our music list, restart at the beginning
-                if sound_index >= len(music_files):
-                    sound_index = 0
+            shuffle(music_files) # Make sure we have random music each time
 
-            # TODO: If our current time is greater than 9:00 but less than midnight we break
-            time.sleep(0.5)
-       
-        # Now play white noise until that time is over
-        mixer.music.stop()
-        mixer.music.load(white_sound)
-        mixer.music.play()
+            sound_index = 0
+            
+            print("Waiting for sleep start time...")
+            while (True):
+                now = datetime.now().time()
+                if now > self.sleep_start_tm:
+                    print("Time to begin sounds again")
+                    break
+                time.sleep(0.5)
 
-        while (True):
-            if not mixer.music.get_busy():
-                pygame.mixer.music.rewind()
-            time.sleep(0.5)
+            # First we play primary music
+            while (True):
+                if not mixer.music.get_busy():
+                    mixer.music.stop()
+                    mixer.music.load(music_files[sound_index])
+                    mixer.music.play()
+                    print("Song switched to: " + music_files[sound_index])
+                    sound_index += 1
+                    # Reached the end of our music list, restart at the beginning
+                    if sound_index >= len(music_files):
+                        sound_index = 0
+
+                now = datetime.now().time()
+                if now > self.music_change_tm:
+                    print("Switch to white noise")
+                    break
+                # TODO: If our current time is greater than 9:00 but less than midnight we break
+                time.sleep(0.5)
+           
+            # Now play white noise until that time is over
+            mixer.music.stop()
+            mixer.music.load(white_sound)
+            mixer.music.play()
+
+            while (True):
+                if not mixer.music.get_busy():
+                    pygame.mixer.music.rewind()
+                now = datetime.now().time()
+                # (now > self.sleep_start_tm and now < mid_night) or now < self.begin_wake_tm)
+                if now > self.sleep_end_tm and now < self.sleep_start_tm:
+                    print("End sound machine")
+                    break
+                time.sleep(0.5)
+                
+            mixer.music.stop()
+            
+        
          
     # Display the current count on the screen
     def DisplayCount(self, value):
