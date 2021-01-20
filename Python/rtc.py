@@ -57,11 +57,14 @@ class AnthonyRTC:
         
         self.red_led = GPIO.PWM(RED_LED, RED_BRIGHTNESS)
         self.green_led = GPIO.PWM(GREEN_LED, GREEN_BRIGHTNESS)
-        self.white_led = GPIO.PWM(WHITE_LEDS, WHITE_BRIGHTNESS)
         
         self.red_led.start(0)
         self.green_led.start(0)
-        self.white_led.start(0)
+
+        self.green_led.ChangeDutyCycle(0)
+        self.red_led.ChangeDutyCycle(0)
+        
+        GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
         
         # Setup SPI bus using hardware SPI:
         spi = board.SPI()
@@ -118,19 +121,22 @@ class AnthonyRTC:
             if ((now > self.sleep_start_tm and now < mid_night) or now < self.begin_wake_tm):
                 #print("Red")
                 self.red_led.ChangeDutyCycle(RED_BRIGHTNESS)
-                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                #self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                GPIO.output(WHITE_LEDS, GPIO.HIGH)
                 self.green_led.ChangeDutyCycle(0)
 
             elif (now > self.begin_wake_tm and now < self.sleep_end_tm):
                 print("Green")
                 self.green_led.ChangeDutyCycle(GREEN_BRIGHTNESS)
-                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                #self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
+                GPIO.output(WHITE_LEDS, GPIO.HIGH)
                 self.red_led.ChangeDutyCycle(0)
             else:
-                print("Off")
+                #print("Off")
                 self.green_led.ChangeDutyCycle(0)
                 self.red_led.ChangeDutyCycle(0)
-                self.white_led.ChangeDutyCycle(0)
+                #self.white_led.ChangeDutyCycle(0)
+                GPIO.output(WHITE_LEDS, GPIO.LOW)
 
             if (now > self.display_start_tm and now < self.begin_wake_tm):
                 GPIO.output(lcd_led, 1)  
@@ -144,7 +150,6 @@ class AnthonyRTC:
                     
             else:
                 GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
-                #print("Display off")
             time.sleep(1)
 
     # Function to operate the sound machine
