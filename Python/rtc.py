@@ -1,8 +1,8 @@
 ################################################################################
 # ANTHONY RTC (ADVANCED)
 # DESC: The Anthony RTC provides several functions.
-# 1. Display's a timer that shows the countdown on when it's time to wake update
-# 2. Display's a red color during sleep time, a green when its time to wake up and
+# 1. Displays a timer that shows the countdown on when it's time to wake update
+# 2. Displays a red color during sleep time, a green when its time to wake up and
 #    a no color when wakeup time has passed
 # 3. Works like a sound machine. 
 # Author: Jonathan L Clark
@@ -26,6 +26,7 @@ BEGIN_WAKE_STR = "6:00:00"
 DISPLAY_START_STR = "2:00:00"
 SLEEP_END_STR = "6:30:00"
 MUSIC_SWITCH_STR = "21:00:00"
+MIDNIGHT_STR = "23:59:59"
 
 # First define some constants to allow easy resizing of shapes.
 BORDER = 20
@@ -103,6 +104,7 @@ class AnthonyRTC:
         self.sleep_start_tm = datetime.strptime(SLEEP_START_STR, FMT).time()
         self.begin_wake_tm = datetime.strptime(BEGIN_WAKE_STR, FMT).time()
         self.display_start_tm = datetime.strptime(DISPLAY_START_STR, FMT).time()
+        self.midnight_end_tm = datetime.strptime(MIDNIGHT_STR, FMT).time()
 
         sound_thread = Thread(target = self.SoundMachine)
         sound_thread.daemon = True
@@ -142,10 +144,8 @@ class AnthonyRTC:
                 GPIO.output(lcd_led, 1)  
                 tdelta = datetime.combine(date.today(), self.begin_wake_tm) - datetime.combine(date.today(), now)
                 if tdelta.seconds < 60:
-                    print(int(tdelta.seconds))
                     self.DisplayCount(int(tdelta.seconds))
                 else:
-                    print(int(tdelta.seconds / 60.0))
                     self.DisplayCount(int(tdelta.seconds / 60.0))
                     
             else:
@@ -159,6 +159,7 @@ class AnthonyRTC:
         white_sound = "/home/pi/Music/KidsSoundMachineSleep/FlowingWater.mp3"
         white_sound2 = "/home/pi/Music/KidsSoundMachineSleep/FlowingCreek.mp3"
         white_sound3 = "/home/pi/Music/KidsSoundMachineSleep/BabblingBrook.mp3"
+        water_sounds = [white_sound, white_sound2]
         mixer.init()
         
         while (True): # Main loop will run forever and ever and ever
@@ -172,18 +173,16 @@ class AnthonyRTC:
 
             shuffle(music_files) # Make sure we have random music each time
 
-            sound_index = 0
-            
+            now = datetime.now().time()
             print("Waiting for sleep start time...")
-            while (True):
+            while (now < self.sleep_start_tm and now > self.sleep_end_tm):
                 now = datetime.now().time()
-                if now > self.sleep_start_tm:
-                    print("Time to begin sounds again")
-                    break
                 time.sleep(0.5)
 
-            # First we play primary music
-            while (True):
+            now = datetime.now().time()
+            sound_index = 0
+            # Play primary music between these two times
+            while (now <= self.music_change_tm and now > self.sleep_start_tm):
                 if not mixer.music.get_busy():
                     mixer.music.stop()
                     mixer.music.load(music_files[sound_index])
@@ -195,31 +194,26 @@ class AnthonyRTC:
                         sound_index = 0
 
                 now = datetime.now().time()
-                if now > self.music_change_tm:
-                    print("Switch to white noise")
-                    break
-                # TODO: If our current time is greater than 9:00 but less than midnight we break
                 time.sleep(0.5)
            
-            # Now play white noise until that time is over
+            # Play sound machine between 9:00 and wakup time 6:00
+            sound_index = 0
             mixer.music.stop()
-            mixer.music.load(white_sound)
-            mixer.music.play()
-
-            while (True):
+            now = datetime.now().time()
+            while (now >= self.music_change_tm or now < self.sleep_end_tm):
                 if not mixer.music.get_busy():
-                    pygame.mixer.music.rewind()
+                    print("Starting sound machine sound")
+                    mixer.music.stop()
+                    mixer.music.load(water_sounds[sound_index])
+                    mixer.music.play()
+                    sound_index+=1
+                    if sound_index >= len(water_sounds):
+                        sound_index = 0
                 now = datetime.now().time()
-                # (now > self.sleep_start_tm and now < mid_night) or now < self.begin_wake_tm)
-                if now > self.sleep_end_tm and now < self.sleep_start_tm:
-                    print("End sound machine")
-                    break
                 time.sleep(0.5)
                 
             mixer.music.stop()
             
-        
-         
     # Display the current count on the screen
     def DisplayCount(self, value):
         if self.last_value == value:
