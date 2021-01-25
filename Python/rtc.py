@@ -19,9 +19,13 @@ import os
 from random import shuffle
 from pygame import mixer
 import RPi.GPIO as GPIO
+import smbus
+import time
+import subprocess
+import bme280
 
 FMT = '%H:%M:%S'
-SLEEP_START_STR = "19:30:00"
+SLEEP_START_STR = "19:15:00"
 BEGIN_WAKE_STR = "6:00:00"
 DISPLAY_START_STR = "2:00:00"
 SLEEP_END_STR = "6:30:00"
@@ -65,7 +69,7 @@ class AnthonyRTC:
         self.green_led.ChangeDutyCycle(0)
         self.red_led.ChangeDutyCycle(0)
         
-        GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
+        #GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
         
         # Setup SPI bus using hardware SPI:
         spi = board.SPI()
@@ -98,6 +102,7 @@ class AnthonyRTC:
          
         # Load a TTF Font
         self.font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONTSIZE)
+        self.font2 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
         
         self.music_change_tm = datetime.strptime(MUSIC_SWITCH_STR, FMT).time()
         self.sleep_end_tm = datetime.strptime(SLEEP_END_STR, FMT).time()
@@ -141,7 +146,7 @@ class AnthonyRTC:
                 GPIO.output(WHITE_LEDS, GPIO.LOW)
 
             if (now > self.display_start_tm and now < self.begin_wake_tm):
-                GPIO.output(lcd_led, 1)  
+                #GPIO.output(lcd_led, 1)  
                 tdelta = datetime.combine(date.today(), self.begin_wake_tm) - datetime.combine(date.today(), now)
                 if tdelta.seconds < 60:
                     self.DisplayCount(int(tdelta.seconds))
@@ -149,11 +154,12 @@ class AnthonyRTC:
                     self.DisplayCount(int(tdelta.seconds / 60.0))
                     
             else:
-                GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
+                pass#GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
             time.sleep(1)
 
     # Function to operate the sound machine
     def SoundMachine(self):
+        display_iterations = 0
         # Anthony
         sound_directory = "/home/pi/Music/KidsSoundMachineSleep/"
         white_sound = "/home/pi/Music/KidsSoundMachineSleep/FlowingWater.mp3"
@@ -164,6 +170,7 @@ class AnthonyRTC:
         
         while (True): # Main loop will run forever and ever and ever
             music_files = []
+            display_iterations = 0
             for file in os.listdir(sound_directory):
                 if file.endswith(".mp3"):
                     file_name = os.path.join(sound_directory, file)
@@ -175,8 +182,13 @@ class AnthonyRTC:
 
             now = datetime.now().time()
             print("Waiting for sleep start time...")
+            self.DisplayStatus()
             while (now < self.sleep_start_tm and now > self.sleep_end_tm):
                 now = datetime.now().time()
+                if display_iterations == 120:
+                    self.DisplayStatus()
+                    display_iterations = 0
+                display_iterations+= 1
                 time.sleep(0.5)
 
             now = datetime.now().time()
@@ -233,6 +245,54 @@ class AnthonyRTC:
         )
         # Display image.
         self.disp.image(self.image)
+
+    # Displays the system status on the screen
+    def DisplayStatus(self):
+        cpu_temp = self.GetCPUTemp()
+        ip_addr = self.GetIpAddress()
+        temperature,pressure,humidity = bme280.readBME280All()
+        GPIO.output(lcd_led, 1)       # set port/pin value to 1/GPIO.HIGH/True
+        self.draw.rectangle((0, 0, self.width, self.height), fill=(0, 0, 0))
+        self.disp.image(self.image)
+        temperature_f = (temperature * 9.0/5.0) + 32.0
+        now = datetime.now() # current date and time
+        time = now.strftime("%H:%M\n")
+        text = time
+        text += "Temp: " + str(round(temperature_f, 1)) + "F\n"
+        text += "Humid: " + str(round(humidity, 1)) + "\n"
+        text += "Pressure: " + str(round(pressure)) + "\n"
+        text += "CPU: " + str(cpu_temp) + "C\n"
+        text += "IP: " + str(ip_addr) + "\n"
+
+        (font_width, font_height) = self.font2.getsize(text)
+        self.draw.text(
+            (0, 0),
+            text,
+            font=self.font2,
+            fill=(255, 255, 255),
+        )
+        self.disp.image(self.image)
+
+    # Gets the CPU temperature
+    def GetCPUTemp(self):
+        output = subprocess.check_output(['vcgencmd', 'measure_temp']).decode("utf-8")
+        splitOut = output.split("temp=")
+        return float(splitOut[1].replace('\n', '').replace('\'', '').replace('C', ''))
+
+    # Gets the system IP address
+    def GetIpAddress(self):
+        output = subprocess.check_output(['ifconfig', 'wlan0']).decode("utf-8")
+        splitStr = output.split(" ")
+        nextIsIp = False
+        ipAddr = "0.0.0.0"
+        for item in splitStr:
+            if item == 'inet':
+                nextIsIp = True
+            elif nextIsIp: 
+                ipAddr = item
+                break
+
+        return ipAddr
      
 if __name__ == '__main__':
     sound_machine = AnthonyRTC()
