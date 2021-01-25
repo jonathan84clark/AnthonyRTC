@@ -191,7 +191,8 @@ class AnthonyRTC:
                 display_iterations+= 1
                 time.sleep(0.5)
 
-            now = datetime.now().time()
+            now = datetime.now().time() 
+            GPIO.output(lcd_led, 0)       # Disable the display at night time
             sound_index = 0
             # Play primary music between these two times
             while (now <= self.music_change_tm and now > self.sleep_start_tm):
