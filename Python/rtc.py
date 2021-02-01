@@ -5,6 +5,19 @@
 # 2. Displays a red color during sleep time, a green when its time to wake up and
 #    a no color when wakeup time has passed
 # 3. Works like a sound machine. 
+#
+# Instructions
+# Run the application with Python3. Before running you must install the following.
+# sudo apt-get install python3-pip
+# pip3 install --upgrade adafruit_blinka
+# git clone https://github.com/adafruit/Adafruit_Python_ILI9341.git
+# sudo pip3 install adafruit-circuitpython-rgb-display
+# sudo pip3 install pillow
+# sudo apt-get install libopenjp2-7
+# sudo apt install libwebp6 libtiff5 libjbig0 liblcms2-2 libwebpmux3 libopenjp2-7 libzstd1 libwebpdemux2
+# sudo apt-get install git curl libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-2.0- 
+# sudo apt-get install git curl libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-2.0-0
+# 
 # Author: Jonathan L Clark
 # Date: 1/16/2021
 ################################################################################
@@ -22,7 +35,7 @@ import RPi.GPIO as GPIO
 import smbus
 import time
 import subprocess
-import bme280
+import bme280 
 
 FMT = '%H:%M:%S'
 SLEEP_START_STR = "19:15:00"
@@ -101,8 +114,8 @@ class AnthonyRTC:
         self.last_value = None
          
         # Load a TTF Font
-        self.font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONTSIZE)
-        self.font2 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 30)
+        self.font = ImageFont.truetype("/home/pi/Documents/AnthonyRTC/Python/Fonts/DejaVuSans.ttf", FONTSIZE)
+        self.font2 = ImageFont.truetype("/home/pi/Documents/AnthonyRTC/Python/Fonts/DejaVuSans.ttf", 30)
         
         self.music_change_tm = datetime.strptime(MUSIC_SWITCH_STR, FMT).time()
         self.sleep_end_tm = datetime.strptime(SLEEP_END_STR, FMT).time()
@@ -161,11 +174,8 @@ class AnthonyRTC:
     def SoundMachine(self):
         display_iterations = 0
         # Anthony
-        sound_directory = "/home/pi/Music/KidsSoundMachineSleep/"
-        white_sound = "/home/pi/Music/KidsSoundMachineSleep/FlowingWater.mp3"
-        white_sound2 = "/home/pi/Music/KidsSoundMachineSleep/FlowingCreek.mp3"
-        white_sound3 = "/home/pi/Music/KidsSoundMachineSleep/BabblingBrook.mp3"
-        water_sounds = [white_sound, white_sound2]
+        sound_directory = "/home/pi/Music/ChurchMusic"
+        white_noise_dir = "/home/pi/Music/WhiteNoise"
         mixer.init()
         
         while (True): # Main loop will run forever and ever and ever
@@ -174,11 +184,18 @@ class AnthonyRTC:
             for file in os.listdir(sound_directory):
                 if file.endswith(".mp3"):
                     file_name = os.path.join(sound_directory, file)
-                    if not file_name == white_sound and not file_name == white_sound2 and not file_name == white_sound3:
-                        music_files.append(file_name)
-                    #print(os.path.join(sound_directory, file))
+                    music_files.append(file_name)
 
             shuffle(music_files) # Make sure we have random music each time
+            
+            white_sound_files = []
+            display_iterations = 0
+            for file in os.listdir(white_noise_dir):
+                if file.endswith(".mp3"):
+                    file_name = os.path.join(white_noise_dir, file)
+                    white_sound_files.append(file_name)
+
+            shuffle(white_sound_files) # Make sure we have random music each time
 
             now = datetime.now().time()
             print("Waiting for sleep start time...")
@@ -217,10 +234,10 @@ class AnthonyRTC:
                 if not mixer.music.get_busy():
                     print("Starting sound machine sound")
                     mixer.music.stop()
-                    mixer.music.load(water_sounds[sound_index])
+                    mixer.music.load(white_sound_files[sound_index])
                     mixer.music.play()
                     sound_index+=1
-                    if sound_index >= len(water_sounds):
+                    if sound_index >= len(white_sound_files):
                         sound_index = 0
                 now = datetime.now().time()
                 time.sleep(0.5)
