@@ -38,7 +38,7 @@ import subprocess
 import bme280 
 
 FMT = '%H:%M:%S'
-SLEEP_START_STR = "19:15:00"
+SLEEP_START_STR = "19:05:00"
 BEGIN_WAKE_STR = "6:00:00"
 DISPLAY_START_STR = "2:00:00"
 SLEEP_END_STR = "6:30:00"
@@ -65,7 +65,7 @@ GPIO.setup(lcd_led, GPIO.OUT) # set a port/pin as an output
 BAUDRATE = 24000000
 RED_BRIGHTNESS = 50.0
 GREEN_BRIGHTNESS = 50.0
-WHITE_BRIGHTNESS = 50.0
+WHITE_BRIGHTNESS = 25.0
 
 class AnthonyRTC:
     def __init__(self):
@@ -73,11 +73,13 @@ class AnthonyRTC:
         GPIO.setup(GREEN_LED, GPIO.OUT)
         GPIO.setup(WHITE_LEDS, GPIO.OUT)
         
-        self.red_led = GPIO.PWM(RED_LED, RED_BRIGHTNESS)
-        self.green_led = GPIO.PWM(GREEN_LED, GREEN_BRIGHTNESS)
+        self.red_led = GPIO.PWM(RED_LED, 1000)
+        self.green_led = GPIO.PWM(GREEN_LED, 1000)
+        self.white_led = GPIO.PWM(WHITE_LEDS, 1000)
         
         self.red_led.start(0)
         self.green_led.start(0)
+        self.white_led.start(0)
 
         self.green_led.ChangeDutyCycle(0)
         self.red_led.ChangeDutyCycle(0)
@@ -135,31 +137,23 @@ class AnthonyRTC:
     # Manage the sleep light
     def SleepLight(self):
         mid_night = datetime.strptime("23:59:59", FMT).time()
-
         while (True):
             now = datetime.now().time()
             if ((now > self.sleep_start_tm and now < mid_night) or now < self.begin_wake_tm):
-                #print("Red")
                 self.red_led.ChangeDutyCycle(RED_BRIGHTNESS)
-                #self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
-                GPIO.output(WHITE_LEDS, GPIO.HIGH)
+                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
                 self.green_led.ChangeDutyCycle(0)
 
             elif (now > self.begin_wake_tm and now < self.sleep_end_tm):
-                print("Green")
                 self.green_led.ChangeDutyCycle(GREEN_BRIGHTNESS)
-                #self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
-                GPIO.output(WHITE_LEDS, GPIO.HIGH)
+                self.white_led.ChangeDutyCycle(WHITE_BRIGHTNESS)
                 self.red_led.ChangeDutyCycle(0)
             else:
-                #print("Off")
                 self.green_led.ChangeDutyCycle(0)
                 self.red_led.ChangeDutyCycle(0)
-                #self.white_led.ChangeDutyCycle(0)
-                GPIO.output(WHITE_LEDS, GPIO.LOW)
+                self.white_led.ChangeDutyCycle(0)
 
-            if (now > self.display_start_tm and now < self.begin_wake_tm):
-                #GPIO.output(lcd_led, 1)  
+            if (now > self.display_start_tm and now < self.begin_wake_tm): 
                 tdelta = datetime.combine(date.today(), self.begin_wake_tm) - datetime.combine(date.today(), now)
                 if tdelta.seconds < 60:
                     self.DisplayCount(int(tdelta.seconds))
@@ -167,7 +161,7 @@ class AnthonyRTC:
                     self.DisplayCount(int(tdelta.seconds / 60.0))
                     
             else:
-                pass#GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
+                pass
             time.sleep(1)
 
     # Function to operate the sound machine
@@ -243,6 +237,7 @@ class AnthonyRTC:
                 time.sleep(0.5)
                 
             mixer.music.stop()
+            os.system("sudo reboot now") # Reboot at the end of our cycle to get us into a good state
             
     # Display the current count on the screen
     def DisplayCount(self, value):
