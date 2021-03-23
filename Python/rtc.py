@@ -17,7 +17,9 @@
 # sudo apt install libwebp6 libtiff5 libjbig0 liblcms2-2 libwebpmux3 libopenjp2-7 libzstd1 libwebpdemux2
 # sudo apt-get install git curl libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-2.0- 
 # sudo apt-get install git curl libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-2.0-0
-# 
+# sudo pip3 install Flask
+# To run this at startup place the following in /etc/rc.local
+# sudo -H -u pi python3 /home/pi/Documents/AnthonyRTC/Python/rtc.py &
 # Author: Jonathan L Clark
 # Date: 1/16/2021
 ################################################################################
@@ -36,6 +38,11 @@ import smbus
 import time
 import subprocess
 import bme280 
+import json
+import requests
+from flask import Flask, request, redirect
+from flask import Response
+from flask import jsonify
 
 FMT = '%H:%M:%S'
 SLEEP_START_STR = "19:05:00"
@@ -65,7 +72,16 @@ GPIO.setup(lcd_led, GPIO.OUT) # set a port/pin as an output
 BAUDRATE = 24000000
 RED_BRIGHTNESS = 50.0
 GREEN_BRIGHTNESS = 50.0
-WHITE_BRIGHTNESS = 25.0
+WHITE_BRIGHTNESS = 10.0
+
+app = Flask(__name__)
+
+@app.route('/', methods=['GET', 'POST'])
+def data_page():
+    global sound_machine
+    data = {"temp" : sound_machine.temp, "pressure" : sound_machine.pressure, "humid" : sound_machine.humidity, "cpu_temp" : sound_machine.cpu_temp, "outdoor_temp" : sound_machine.outdoor_temp, "outdoor_humid" : sound_machine.outdoor_humid}
+    output = jsonify(data)
+    return output
 
 class AnthonyRTC:
     def __init__(self):
@@ -73,9 +89,9 @@ class AnthonyRTC:
         GPIO.setup(GREEN_LED, GPIO.OUT)
         GPIO.setup(WHITE_LEDS, GPIO.OUT)
         
-        self.red_led = GPIO.PWM(RED_LED, 1000)
-        self.green_led = GPIO.PWM(GREEN_LED, 1000)
-        self.white_led = GPIO.PWM(WHITE_LEDS, 1000)
+        self.red_led = GPIO.PWM(RED_LED, 4000)
+        self.green_led = GPIO.PWM(GREEN_LED, 4000)
+        self.white_led = GPIO.PWM(WHITE_LEDS, 4000)
         
         self.red_led.start(0)
         self.green_led.start(0)
@@ -83,6 +99,13 @@ class AnthonyRTC:
 
         self.green_led.ChangeDutyCycle(0)
         self.red_led.ChangeDutyCycle(0)
+
+        self.outdoor_temp = 0.0
+        self.outdoor_humid = 0.0
+        self.temp = 0.0
+        self.pressure = 0.0
+        self.humidity = 0.0
+        self.cpu_temp = 0.0
         
         #GPIO.output(lcd_led, 0)       # set port/pin value to 1/GPIO.HIGH/True  
         
@@ -117,7 +140,7 @@ class AnthonyRTC:
          
         # Load a TTF Font
         self.font = ImageFont.truetype("/home/pi/Documents/AnthonyRTC/Python/Fonts/DejaVuSans.ttf", FONTSIZE)
-        self.font2 = ImageFont.truetype("/home/pi/Documents/AnthonyRTC/Python/Fonts/DejaVuSans.ttf", 30)
+        self.font2 = ImageFont.truetype("/home/pi/Documents/AnthonyRTC/Python/Fonts/DejaVuSans.ttf", 25)
         
         self.music_change_tm = datetime.strptime(MUSIC_SWITCH_STR, FMT).time()
         self.sleep_end_tm = datetime.strptime(SLEEP_END_STR, FMT).time()
@@ -133,6 +156,26 @@ class AnthonyRTC:
         sleep_thread = Thread(target = self.SleepLight)
         sleep_thread.daemon = True
         sleep_thread.start()
+
+        temp_thread = Thread(target = self.GetOutdoorTemps)
+        temp_thread.daemon = True
+        temp_thread.start()
+
+        server_thread = Thread(target = self.run_server)
+        server_thread.daemon = True
+        server_thread.start()
+
+    # Gets the outdoor temperature for the log file
+    def GetOutdoorTemps(self):
+        while (True):
+            try:
+                response = requests.get('http://192.168.1.191')
+                data = json.loads(response.text)
+                self.outdoor_temp = data["temperature"]
+                self.outdoor_humid = data["humidity"]
+            except Exception as e:
+                print("Except: " + str(e))
+            time.sleep(10.0)
 
     # Manage the sleep light
     def SleepLight(self):
@@ -264,6 +307,10 @@ class AnthonyRTC:
         cpu_temp = self.GetCPUTemp()
         ip_addr = self.GetIpAddress()
         temperature,pressure,humidity = bme280.readBME280All()
+        self.temp = temperature
+        self.pressure = pressure
+        self.humidity = humidity
+        self.cpu_temp = cpu_temp
         GPIO.output(lcd_led, 1)       # set port/pin value to 1/GPIO.HIGH/True
         self.draw.rectangle((0, 0, self.width, self.height), fill=(0, 0, 0))
         self.disp.image(self.image)
@@ -276,6 +323,8 @@ class AnthonyRTC:
         text += "Pressure: " + str(round(pressure)) + "\n"
         text += "CPU: " + str(cpu_temp) + "C\n"
         text += "IP: " + str(ip_addr) + "\n"
+        text += "Out Temp: " + str(self.outdoor_temp) + "F\n"
+        text += "Out Humid: " + str(self.outdoor_humid) + "\n"
 
         (font_width, font_height) = self.font2.getsize(text)
         self.draw.text(
@@ -306,7 +355,12 @@ class AnthonyRTC:
                 break
 
         return ipAddr
+
+    # Runs the web server
+    def run_server(self):
+        app.run(use_reloader=False, debug=True, host="0.0.0.0", port=5000)
      
+
 if __name__ == '__main__':
     sound_machine = AnthonyRTC()
 
